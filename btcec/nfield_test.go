@@ -238,6 +238,21 @@ func TestNfieldNormalize(t *testing.T) {
 			[10]uint32{0xd0364141, 0xf497a300, 0x8a03bbc0, 0x739abd00, 0xfebaaec0, 0xffffffc0, 0xffffffc0, 0xffffffc0, 0xffffffc0, 0x3fffc0},
 			[10]uint32{0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x000000},
 		},
+		// secp256k1 n + 1 + 2^26 + 2^52 + 2^78 + 2^104
+		{
+			[10]uint32{0xd0364142, 0xf497a301, 0x8a03bbc1, 0x739abd01, 0xfebaaec1, 0xffffffc0, 0xffffffc0, 0xffffffc0, 0xffffffc0, 0x3fffc0},
+			[10]uint32{0x00000001, 0x00000001, 0x00000001, 0x00000001, 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x000000},
+		},
+		// secp256k1 n + 2^26 - 1
+		{
+			[10]uint32{0xd0364140, 0xf497a301, 0x8a03bbc0, 0x739abd00, 0xfebaaec0, 0xffffffc0, 0xffffffc0, 0xffffffc0, 0xffffffc0, 0x3fffc0},
+			[10]uint32{0x3ffffff, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x000000},
+		},
+		// secp256k1 n + 2^104 - 1
+		{
+			[10]uint32{0xd0364140, 0xf497a300, 0x8a03bbc0, 0x739abd00, 0xfebaaec1, 0xffffffc0, 0xffffffc0, 0xffffffc0, 0xffffffc0, 0x3fffc0},
+			[10]uint32{0x3ffffff, 0x3ffffff, 0x3ffffff, 0x3ffffff, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x000000},
+		},
 		// 2^256 - 1
 		{
 			[10]uint32{0xffffffff, 0xffffffc0, 0xffffffc0, 0xffffffc0, 0xffffffc0, 0xffffffc0, 0xffffffc0, 0xffffffc0, 0xffffffc0, 0x3fffc0},
@@ -271,7 +286,7 @@ func TestNfieldIsOdd(t *testing.T) {
 		// 2^64 - 2
 		{"fffffffffffffffe", false},
 		// secp256k1 n
-		{"fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f", true},
+		{"fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141", true},
 	}
 
 	t.Logf("Running %d tests", len(tests))
@@ -772,8 +787,8 @@ func TestNfieldSquareRand(t *testing.T) {
 	}
 }
 
-// TestInverse ensures that finding the multiplicative inverse via Inverse works
-// as expected.
+// TestNfieldInverse ensures that finding the multiplicative inverse via
+// Inverse works as expected.
 func TestNfieldInverse(t *testing.T) {
 	tests := []struct {
 		in       string // hex encoded value
@@ -825,7 +840,7 @@ func TestNfieldInverse(t *testing.T) {
 	}
 }
 
-// TestNfieldInvRand tests the inverse correctness by doing the
+// TestNfieldInverseRand tests the inverse correctness by doing the
 // same calculation with Big.Int
 func TestNfieldInverseRand(t *testing.T) {
 	N := btcec.S256().N

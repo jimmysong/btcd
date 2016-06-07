@@ -640,7 +640,7 @@ func (curve *KoblitzCurve) splitK(k []byte) ([]byte, []byte, int, int) {
 	// c2 = round(b1 * k / n) from step 4 (sign reversed to optimize one step)
 	// Rounding isn't really necessary and costs too much, hence skipped
 	c2.Magnitude(curve.b1, nfieldK)
-	c2.n[0] += 1
+	c2.n[0]++
 	// k1 = k - c1 * a1 - c2 * a2 from step 5
 	tmp1.Mul2(c1, curve.a1).Normalize()
 	tmp2.Mul2(c2, curve.a2).Normalize()
@@ -648,7 +648,7 @@ func (curve *KoblitzCurve) splitK(k []byte) ([]byte, []byte, int, int) {
 	k1.Add2(nfieldK, tmp1)
 	tmp2.Negate().Normalize()
 	k1.Add(tmp2)
-	k1.Normalize().Normalize()
+	k1.Normalize()
 	if k1.Cmp(curve.halfn) == 1 {
 		k1Sign = -1
 		k1.Negate()

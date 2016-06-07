@@ -513,6 +513,19 @@ func TestSignCompact(t *testing.T) {
 	}
 }
 
+func TestSignCompact2(t *testing.T) {
+	datum := []string{
+		"75faf12f2587878ea7ff4562cc21b659be70472c5efcff1256bbb5e21b1bea33",
+		"6e1015bd07a49fc1e85e2bdd1e4df86e835f2bea9e3f651126f066eaf010091c",
+		"c1fcda17e43cbabd2b3222cd3b10c4703ac68b93c02294d5f31a1f7dbed92d53",
+	}
+	for i, dataStr := range datum {
+		data, _ := hex.DecodeString(dataStr)
+		testSignCompact(t, fmt.Sprintf("%d 0", i), btcec.S256(), data, true)
+		testSignCompact(t, fmt.Sprintf("%d 1", i), btcec.S256(), data, false)
+	}
+}
+
 func TestRFC6979(t *testing.T) {
 	// Test vectors matching Trezor and CoreBitcoin implementations.
 	// - https://github.com/trezor/trezor-crypto/blob/9fea8f8ab377dc514e40c6fd1f7c89a74c1d8dc6/tests.c#L432-L453
@@ -597,12 +610,12 @@ func TestRFC6979(t *testing.T) {
 
 func TestSignatureIsEqual(t *testing.T) {
 	sig1 := &btcec.Signature{
-		R: fromHex("0082235e21a2300022738dabb8e1bbd9d19cfb1e7ab8c30a23b0afbb8d178abcf3"),
-		S: fromHex("24bf68e256c534ddfaf966bf908deb944305596f7bdcc38d69acad7f9c868724"),
+		R: btcec.NewNfieldVal().SetHex("0082235e21a2300022738dabb8e1bbd9d19cfb1e7ab8c30a23b0afbb8d178abcf3"),
+		S: btcec.NewNfieldVal().SetHex("24bf68e256c534ddfaf966bf908deb944305596f7bdcc38d69acad7f9c868724"),
 	}
 	sig2 := &btcec.Signature{
-		R: fromHex("4e45e16932b8af514961a1d3a1a25fdf3f4f7732e9d624c6c61548ab5fb8cd41"),
-		S: fromHex("181522ec8eca07de4860a4acdd12909d831cc56cbbac4622082221a8768d1d09"),
+		R: btcec.NewNfieldVal().SetHex("4e45e16932b8af514961a1d3a1a25fdf3f4f7732e9d624c6c61548ab5fb8cd41"),
+		S: btcec.NewNfieldVal().SetHex("181522ec8eca07de4860a4acdd12909d831cc56cbbac4622082221a8768d1d09"),
 	}
 
 	if !sig1.IsEqual(sig1) {
@@ -613,5 +626,35 @@ func TestSignatureIsEqual(t *testing.T) {
 	if sig1.IsEqual(sig2) {
 		t.Fatalf("value of IsEqual is incorrect, %v is not "+
 			"equal to %v", sig1, sig2)
+	}
+}
+
+func TestVerify(t *testing.T) {
+	tests := []struct {
+		hash []byte
+		r    []byte
+		s    []byte
+		key  []byte
+	}{
+		{
+			[]byte{0x65, 0x33, 0xa1, 0x64, 0xd5, 0x62, 0x95, 0xbe, 0x7e, 0x13, 0xf5, 0x34, 0xde, 0xdd, 0x06, 0x24, 0xa9, 0xa0, 0xcf, 0xa1, 0xdb, 0x77, 0xd4, 0x0e, 0x3d, 0x73, 0xc3, 0x9c, 0x9a, 0x00, 0xce, 0x6c},
+			[]byte{0xed, 0x39, 0x69, 0xfc, 0xda, 0xe3, 0xd5, 0x0e, 0xad, 0x3e, 0x4b, 0xa5, 0xd9, 0x85, 0x33, 0x5e, 0xca, 0xf1, 0xce, 0x49, 0x78, 0x70, 0x28, 0x5a, 0x61, 0x9c, 0x82, 0x18, 0x9a, 0x90, 0xe8, 0xd6},
+			[]byte{0x41, 0x33, 0xc5, 0x82, 0x90, 0xb0, 0x26, 0x3e, 0x5a, 0x2f, 0xee, 0x5c, 0x2c, 0x05, 0xe2, 0x58, 0x8f, 0xcf, 0x1b, 0x23, 0x63, 0x7a, 0x7d, 0x2f, 0xf2, 0x40, 0xf6, 0xe1, 0xab, 0xfb, 0x83, 0x0f},
+			[]byte{0x02, 0xa6, 0x73, 0x63, 0x8c, 0xb9, 0x58, 0x7c, 0xb6, 0x8e, 0xa0, 0x8d, 0xbe, 0xf6, 0x85, 0xc6, 0xf2, 0xd2, 0xa7, 0x51, 0xa8, 0xb3, 0xc6, 0xf2, 0xa7, 0xe9, 0xa4, 0x99, 0x9e, 0x6e, 0x4b, 0xfa, 0xf5},
+		},
+	}
+
+	for i, test := range tests {
+		sig := &btcec.Signature{
+			R: btcec.NewNfieldVal().SetByteSlice(test.r),
+			S: btcec.NewNfieldVal().SetByteSlice(test.s),
+		}
+		pk, err := btcec.ParsePubKey(test.key, btcec.S256())
+		if err != nil {
+			t.Fatalf("%d: Bad public key.", i)
+		}
+		if !sig.Verify(test.hash, pk) {
+			t.Errorf("%d: Verification of signature failed.", i)
+		}
 	}
 }

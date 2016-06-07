@@ -10,49 +10,8 @@ package btcec
 //     http://cacr.uwaterloo.ca/hac/
 
 // All elliptic curve operations for secp256k1 are done in a finite field
-// characterized by a 256-bit prime.  Given this precision is larger than the
-// biggest available native type, obviously some form of bignum math is needed.
-// This package implements specialized fixed-precision field arithmetic rather
-// than relying on an arbitrary-precision arithmetic package such as math/big
-// for dealing with the field math since the size is known.  As a result, rather
-// large performance gains are achieved by taking advantage of many
-// optimizations not available to arbitrary-precision arithmetic and generic
-// modular arithmetic algorithms.
-//
-// There are various ways to internally represent each finite field element.
-// For example, the most obvious representation would be to use an array of 4
-// uint64s (64 bits * 4 = 256 bits).  However, that representation suffers from
-// a couple of issues.  First, there is no native Go type large enough to handle
-// the intermediate results while adding or multiplying two 64-bit numbers, and
-// second there is no space left for overflows when performing the intermediate
-// arithmetic between each array element which would lead to expensive carry
-// propagation.
-//
-// Given the above, this implementation represents the the field elements as
-// 10 uint32s with each word (array entry) treated as base 2^26.  This was
-// chosen for the following reasons:
-// 1) Most systems at the current time are 64-bit (or at least have 64-bit
-//    registers available for specialized purposes such as MMX) so the
-//    intermediate results can typically be done using a native register (and
-//    using uint64s to avoid the need for additional half-word arithmetic)
-// 2) In order to allow addition of the internal words without having to
-//    propagate the the carry, the max normalized value for each register must
-//    be less than the number of bits available in the register
-// 3) Since we're dealing with 32-bit values, 64-bits of overflow is a
-//    reasonable choice for #2
-// 4) Given the need for 256-bits of precision and the properties stated in #1,
-//    #2, and #3, the representation which best accomodates this is 10 uint32s
-//    with base 2^26 (26 bits * 10 = 260 bits, so the final word only needs 22
-//    bits) which leaves the desired 64 bits (32 * 10 = 320, 320 - 256 = 64) for
-//    overflow
-//
-// Since it is so important that the field arithmetic is extremely fast for
-// high performance crypto, this package does not perform any validation where
-// it ordinarily would.  For example, some functions only give the correct
-// result is the field is normalized and there is no checking to ensure it is.
-// While I typically prefer to ensure all state and input is valid for most
-// packages, this code is really only used internally and every extra check
-// counts.
+// characterized by a 256-bit order. The strategy here is the same as that
+// of field.go. See notes in field.go for how everything is optimized for speed.
 
 import (
 	"encoding/hex"
@@ -86,46 +45,63 @@ const (
 	// needed to represent the value.
 	nfieldMSBMask = (1 << nfieldMSBBits) - 1
 
-	// nfieldPrimeWordZero is word zero of the secp256k1 prime in the
+	// nfieldPrimeWordZero is word zero of the secp256k1 curve order in the
 	// internal nfield representation.  It is used during modular reduction
 	// and negation.
 	nfieldPrimeWordZero = 0x364141
 
-	// nfieldPrimeWordOne is word one of the secp256k1 prime in the
+	// nfieldPrimeWordOne is word one of the secp256k1 curve order in the
 	// internal nfield representation.  It is used during modular reduction
 	// and negation.
 	nfieldPrimeWordOne = 0x97a334
 
-	// nfieldPrimeWordTwo is word two of the secp256k1 prime in the
+	// nfieldPrimeWordTwo is word two of the secp256k1 curve order in the
 	// internal nfield representation.  It is used during modular reduction
 	// and negation.
 	nfieldPrimeWordTwo = 0x203bbfd
 
-	// nfieldPrimeWordThree is word three of the secp256k1 prime in the
+	// nfieldPrimeWordThree is word three of the secp256k1 curve order in the
 	// internal nfield representation.  It is used during modular reduction
 	// and negation.
 	nfieldPrimeWordThree = 0x39abd22
 
-	// nfieldPrimeWordFour is word four of the secp256k1 prime in the
+	// nfieldPrimeWordFour is word four of the secp256k1 curve order in the
 	// internal nfield representation.  It is used during modular reduction
 	// and negation.
 	nfieldPrimeWordFour = 0x2baaedc
 
+	// The secp256k1 N is equivalent to
+	// 2^256 - 432420386565659656852420866394968145599
+	// 432420386565659656852420866394968145599 in nfield representation
+	// (base 2^26) is:
+	// n[0] = 0x3c9bebf (63553215)
+	// n[1] = 0x3685ccb (57171147)
+	// n[2] = 0x1fc4402 (33309698)
+	// n[3] = 0x6542dd  (6636253)
+	// n[4] = 0x1455123 (21319971)
+	// That is to say
+	// 21319971 * 2**104 + 6636253 * 2**78 + 33309698 * 2**52
+	// + 57171147 * 2**26 + 63553215 = 432420386565659656852420866394968145599
+	// The next 5 constants are used to represent the amount that the
+	// order of secp256k1 is less than 2^256
 	nfieldComplementZero  = 0x3c9bebf
 	nfieldComplementOne   = 0x3685ccb
 	nfieldComplementTwo   = 0x1fc4402
 	nfieldComplementThree = 0x6542dd
 	nfieldComplementFour  = 0x1455123
-	nfieldReduceZero      = nfieldComplementZero * 16
-	nfieldReduceOne       = nfieldComplementOne * 16
-	nfieldReduceTwo       = nfieldComplementTwo * 16
-	nfieldReduceThree     = nfieldComplementThree * 16
-	nfieldReduceFour      = nfieldComplementFour * 16
+	// In order to reduce via modulo arithmetic, it's useful to have
+	// the above 5 numbers shifted 4 bits to the left. This will allow
+	// reduction arithmetic to be faster.
+	nfieldReduceZero  = nfieldComplementZero * 16
+	nfieldReduceOne   = nfieldComplementOne * 16
+	nfieldReduceTwo   = nfieldComplementTwo * 16
+	nfieldReduceThree = nfieldComplementThree * 16
+	nfieldReduceFour  = nfieldComplementFour * 16
 )
 
 // nfieldVal implements optimized fixed-precision arithmetic over the
-// secp256k1 finite nfield.  This means all arithmetic is performed modulo
-// 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f.  It
+// secp256k1 finite curve order.  This means all arithmetic is performed modulo
+// 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141.  It
 // represents each 256-bit value as 10 32-bit integers in base 2^26.  This
 // provides 6 bits of overflow in each word (10 bits in the most significant
 // word) for a total of 64 bits of overflow (9*6 + 10 = 64).  It only implements
@@ -268,8 +244,8 @@ func (f *nfieldVal) SetHex(hexString string) *nfieldVal {
 }
 
 // Normalize normalizes the internal nfield words into the desired range and
-// performs fast modular reduction over the secp256k1 prime by making use of the
-// special form of the prime.
+// performs fast modular reduction over the secp256k1 curve order by making use of the
+// special form of the curve order.
 func (f *nfieldVal) Normalize() *nfieldVal {
 	// The nfield representation leaves 6 bits of overflow in each
 	// word so intermediate calculations can be performed without needing
@@ -302,8 +278,8 @@ func (f *nfieldVal) Normalize() *nfieldVal {
 	// At this point, if the magnitude is greater than 0, the overall value
 	// is greater than the max possible 256-bit value.  In particular, it is
 	// "how many times larger" than the max value it is.  Since this nfield
-	// is doing arithmetic modulo the secp256k1 prime, we need to perform
-	// modular reduction over the prime.
+	// is doing arithmetic modulo the secp256k1 curve order, we need to perform
+	// modular reduction over the order.
 	//
 	// Per [HAC] section 14.3.4: Reduction method of moduli of special form,
 	// when the modulus is of the special form m = b^t - c, highly efficient
@@ -329,7 +305,7 @@ func (f *nfieldVal) Normalize() *nfieldVal {
 	// until the quotient is zero.  However, due to our nfield representation
 	// we already know at least how many times we would need to repeat as
 	// it's the value currently in m.  Thus we can simply multiply the
-	// magnitude by the nfield representation of the prime and do a single
+	// magnitude by the nfield representation of the order and do a single
 	// iteration.  Notice that nothing will be changed when the magnitude is
 	// zero, so we could skip this in that case, however always running
 	// regardless allows it to run in constant time.
@@ -353,6 +329,9 @@ func (f *nfieldVal) Normalize() *nfieldVal {
 	t8 = r & nfieldBaseMask
 	r = (r >> nfieldBase) + t9
 	t9 = r & nfieldMSBMask
+
+	// At this point, one more subtraction of the order might be needed
+	// if the current result is greater than or equal to the n.
 
 	// At this point, one more subtraction of the prime
 	// might be needed if the current result is greater than or equal to the
@@ -540,7 +519,7 @@ func (f *nfieldVal) Equals(val *nfieldVal) bool {
 // The nfield value is returned to support chaining.  This enables syntax like:
 // f.NegateVal(f2).AddInt(1) so that f = -f2 + 1.
 func (f *nfieldVal) NegateVal(val *nfieldVal) *nfieldVal {
-	// Negation in the nfield is just the prime minus the value.
+	// Negation in the nfield is just the order minus the value.
 	// Normalize first
 	f.Normalize()
 	if f.n[0]+f.n[1]+f.n[2]+f.n[3]+f.n[4]+f.n[5]+f.n[6]+f.n[7]+f.n[8]+f.n[9] == 0 {
@@ -1280,11 +1259,11 @@ func (f *nfieldVal) SquareVal(val *nfieldVal) *nfieldVal {
 	// quotient is zero.  However, due to the above, we already know at
 	// least how many times we would need to repeat as it's the value
 	// currently in m.  Thus we can simply multiply the magnitude by the
-	// nfield representation of the prime and do a single iteration.  Notice
+	// nfield representation of the order and do a single iteration.  Notice
 	// that nothing will be changed when the magnitude is zero, so we could
 	// skip this in that case, however always running regardless allows it
 	// to run in constant time.  The final result will be in the range
-	// 0 <= result <= prime + (2^64 - c), so it is guaranteed to have a
+	// 0 <= result <= order + (2^64 - c), so it is guaranteed to have a
 	// magnitude of 1, but it is denormalized.
 	d := t0 + m*nfieldComplementZero
 	f.n[0] = uint32(d & nfieldBaseMask)
@@ -1324,7 +1303,7 @@ func (f *nfieldVal) Inverse() *nfieldVal {
 	// The secp256k1 n - 2 is
 	// 2^256 - 432420386565659656852420866394968145601.
 	//
-	// This has a cost of 258 nfield squarings and 33 nfield multiplications.
+	// This has a cost of 259 nfield squarings and 64 nfield multiplications.
 	var a2, a3, a4, a5, a6, a8, a9, a10, a11, a21, a42, a63, a1019, a1023 nfieldVal
 	a2.SquareVal(f)
 	a3.Mul2(&a2, f)
@@ -1753,17 +1732,5 @@ func (f *nfieldVal) DebugPrint() {
 }
 
 func (f *nfieldVal) BitLen() int {
-	f.Normalize()
-	// find the highest bit
-
-	for i, v := range f.n {
-		if v != 0 {
-			r := 0
-			for x := v; x > 0; x >>= 1 {
-				r++
-			}
-			return r + (9-i)*26
-		}
-	}
-	return 0
+	return 256
 }

@@ -70,15 +70,15 @@ func (sig *Signature) Serialize() []byte {
 	return b
 }
 
+// Verify returns whether or not the signature is valid.
 func (sig *Signature) Verify(hash []byte, pubKey *PublicKey) bool {
 	zero := new(nfieldVal)
 	if sig.S.Cmp(zero) == 0 || sig.R.Cmp(zero) == 0 {
 		return false
 	}
 	c := pubKey.Curve
-	tmp := hashToInt(hash, c)
-	e := new(nfieldVal).SetByteSlice(tmp.Bytes())
-	w := sig.S.Inverse()
+	e := hashToNfield(hash)
+	w := new(nfieldVal).Set(sig.S).Inverse()
 	u1 := new(nfieldVal).Mul2(e, w)
 	u2 := new(nfieldVal).Mul2(sig.R, w)
 
@@ -251,7 +251,7 @@ func canonicalizeInt(val *nfieldVal) []byte {
 	// remove the left-padding of 0's
 	for i, word := range full {
 		if word == 0 {
-			b = full[i:]
+			b = full[i+1:]
 		} else {
 			break
 		}
@@ -281,6 +281,13 @@ func canonicalPadding(b []byte) error {
 	default:
 		return nil
 	}
+}
+
+// hashToNfield converts a hash value to an nfieldVal.
+// Note we don't have to worry about right shifting excess bits since
+// the number of bits of the curve order is 256 which divides by 8 cleanly.
+func hashToNfield(hash []byte) *nfieldVal {
+	return new(nfieldVal).SetByteSlice(hash)
 }
 
 // hashToInt converts a hash value to an integer. There is some disagreement
@@ -318,7 +325,6 @@ func recoverKeyFromSignature(curve *KoblitzCurve, sig *Signature, msg []byte,
 	Rx := new(big.Int).Mul(curve.Params().N,
 		new(big.Int).SetInt64(int64(iter/2)))
 	sigR := new(big.Int).SetBytes(sig.R.Bytes()[:])
-	sigS := new(big.Int).SetBytes(sig.S.Bytes()[:])
 	Rx.Add(Rx, sigR)
 	if Rx.Cmp(curve.Params().P) != -1 {
 		return nil, errors.New("calculated Rx is larger than curve P")
@@ -342,25 +348,20 @@ func recoverKeyFromSignature(curve *KoblitzCurve, sig *Signature, msg []byte,
 
 	// 1.5 calculate e from message using the same algorithm as ecdsa
 	// signature calculation.
-	e := hashToInt(msg, curve)
+	e := hashToNfield(msg)
 
 	// Step 1.6.1:
 	// We calculate the two terms sR and eG separately multiplied by the
 	// inverse of r (from the signature). We then add them to calculate
 	// Q = r^-1(sR-eG)
-	invr := new(big.Int).ModInverse(sigR, curve.Params().N)
-
-	// first term.
-	invrS := new(big.Int).Mul(invr, sigS)
-	invrS.Mod(invrS, curve.Params().N)
-	sRx, sRy := curve.ScalarMult(Rx, Ry, invrS.Bytes())
+	invr := new(nfieldVal).Set(sig.R).Inverse()
+	invrS := new(nfieldVal).Set(invr)
+	invrS.Mul(sig.S)
+	sRx, sRy := curve.ScalarMult(Rx, Ry, invrS.Bytes()[:])
 
 	// second term.
-	e.Neg(e)
-	e.Mod(e, curve.Params().N)
-	e.Mul(e, invr)
-	e.Mod(e, curve.Params().N)
-	minuseGx, minuseGy := curve.ScalarBaseMult(e.Bytes())
+	e.Negate().Mul(invr)
+	minuseGx, minuseGy := curve.ScalarBaseMult(e.Bytes()[:])
 
 	// TODO(oga) this would be faster if we did a mult and add in one
 	// step to prevent the jacobian conversion back and forth.
@@ -427,8 +428,7 @@ func SignCompact(curve *KoblitzCurve, key *PrivateKey,
 // Koblitz curve in "curve". If the signature matches then the recovered public
 // key will be returned as well as a boolen if the original key was compressed
 // or not, else an error will be returned.
-func RecoverCompact(curve *KoblitzCurve, signature,
-	hash []byte) (*PublicKey, bool, error) {
+func RecoverCompact(curve *KoblitzCurve, signature, hash []byte) (*PublicKey, bool, error) {
 	bitlen := (curve.BitSize + 7) / 8
 	if len(signature) != 1+bitlen*2 {
 		return nil, false, errors.New("invalid compact signature size")
@@ -460,12 +460,9 @@ func signRFC6979(privateKey *PrivateKey, hash []byte) (*Signature, error) {
 	tmp, _ := privkey.Curve.ScalarBaseMult(k.Bytes()[:])
 	r := new(nfieldVal).SetByteSlice(tmp.Bytes())
 
-	tmp = hashToInt(hash, privkey.Curve)
-	e := new(nfieldVal).SetByteSlice(tmp.Bytes())
+	e := hashToNfield(hash)
 	tmp2 := new(nfieldVal).SetByteSlice(privkey.D.Bytes())
-	s := new(nfieldVal).Mul2(tmp2, r)
-	s.Add(e)
-	s.Mul(inv)
+	s := new(nfieldVal).Mul2(tmp2, r).Add(e).Mul(inv)
 
 	if s.Cmp(curve.halfn) == 1 {
 		s.Negate()

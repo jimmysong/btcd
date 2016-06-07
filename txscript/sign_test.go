@@ -66,8 +66,8 @@ func checkScripts(msg string, tx *wire.MsgTx, idx int, sigScript, pkScript []byt
 
 	err = vm.Execute()
 	if err != nil {
-		return fmt.Errorf("invalid script signature for %s: %v", msg,
-			err)
+		return fmt.Errorf("invalid script signature for %s: %v %v", msg,
+			err, vm)
 	}
 
 	return nil
