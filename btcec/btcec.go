@@ -21,6 +21,7 @@ package btcec
 
 import (
 	"crypto/elliptic"
+	"fmt"
 	"math/big"
 	"sync"
 )
@@ -621,7 +622,7 @@ func (curve *KoblitzCurve) Double(x1, y1 *big.Int) (*big.Int, *big.Int) {
 // This is algorithm 3.74 from [GECC].
 //
 // One thing of note about this algorithm is that no matter what c1 and c2 are,
-// the final equation of k = k1 + k2 * lambda (mod n) will hold.  This is
+// the final equation of k = k1 + k2 * lambda (mod n) Will hold.  This is
 // provable mathematically due to how a1/b1/a2/b2 are computed.
 //
 // c1 and c2 are chosen to minimize the max(k1,k2).
@@ -777,6 +778,8 @@ func (curve *KoblitzCurve) ScalarMult(Bx, By *big.Int, k []byte) (*big.Int, *big
 	// Decompose K into k1 and k2 in order to halve the number of EC ops.
 	// See Algorithm 3.74 in [GECC].
 	k1, k2, signK1, signK2 := curve.splitK(curve.moduloReduce(k))
+
+	fmt.Printf("k1: %X, k2: %X, %d %d", k1, k2, signK1, signK2)
 
 	// The main equation here to remember is:
 	//   k * P = k1 * P + k2 * ϕ(P)
