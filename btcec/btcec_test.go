@@ -659,7 +659,7 @@ func TestScalarMultRand(t *testing.T) {
 		exponent.Mul(exponent, new(big.Int).SetBytes(data))
 		xWant, yWant := s256.ScalarBaseMult(exponent.Bytes())
 		if x.Cmp(xWant) != 0 || y.Cmp(yWant) != 0 {
-			t.Fatalf("%d: bad output for %X: got (%X, %X), want (%X, %X)", i, data, x, y, xWant, yWant)
+			t.Fatalf("%d: bad output for %x: got (%x, %x), want (%x, %x)", i, data, x, y, xWant, yWant)
 			break
 		}
 	}
@@ -742,7 +742,8 @@ func TestSplitK(t *testing.T) {
 		k2Int := new(big.Int).SetBytes(k2)
 		k2SignInt := new(big.Int).SetInt64(int64(k2Sign))
 		k2Int.Mul(k2Int, k2SignInt)
-		gotK := new(big.Int).Mul(k2Int, s256.lambda)
+		lambdaAsBigInt, _ := new(big.Int).SetString(s256.lambda.String(), 16)
+		gotK := new(big.Int).Mul(k2Int, lambdaAsBigInt)
 		gotK.Add(k1Int, gotK)
 		gotK.Mod(gotK, s256.N)
 		if k.Cmp(gotK) != 0 {
@@ -768,7 +769,8 @@ func TestSplitKRand(t *testing.T) {
 		k2Int := new(big.Int).SetBytes(k2)
 		k2SignInt := new(big.Int).SetInt64(int64(k2Sign))
 		k2Int.Mul(k2Int, k2SignInt)
-		gotK := new(big.Int).Mul(k2Int, s256.lambda)
+		lambdaAsBigInt, _ := new(big.Int).SetString(s256.lambda.String(), 16)
+		gotK := new(big.Int).Mul(k2Int, lambdaAsBigInt)
 		gotK.Add(k1Int, gotK)
 		gotK.Mod(gotK, s256.N)
 		if k.Cmp(gotK) != 0 {
@@ -1039,7 +1041,10 @@ func TestVectors(t *testing.T) {
 		sha.Reset()
 		sha.Write(msg)
 		hashed := sha.Sum(nil)
-		sig := Signature{R: fromHex(test.r), S: fromHex(test.s)}
+		sig := Signature{
+			R: new(nfieldVal).SetHex(test.r),
+			S: new(nfieldVal).SetHex(test.s),
+		}
 		if verified := sig.Verify(hashed, &pub); verified != test.ok {
 			t.Errorf("%d: bad result %v instead of %v", i, verified,
 				test.ok)
