@@ -6,9 +6,9 @@
 package btcec
 
 import (
-	"crypto/rand"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"reflect"
 	"testing"
 )
@@ -685,17 +685,28 @@ func TestNfieldMul(t *testing.T) {
 // TestNfieldMulRand tests the multiplication correctness by doing the
 // same calculation with Big.Int
 func TestNfieldMulRand(t *testing.T) {
+
+	randSeed := rand.Int63()
+	defer func() {
+		if t.Failed() {
+			t.Logf("Random numbers using seed: %v", randSeed)
+		}
+	}()
+	prng := rand.New(rand.NewSource(randSeed))
+
 	data := make([]byte, 32)
-	_, err := rand.Read(data)
+	_, err := prng.Read(data)
 	if err != nil {
 		t.Fatalf("failed to read random data")
 	}
 	N := S256().N
 	a := new(big.Int).SetBytes(data)
 	aN := new(nfieldVal).SetByteSlice(a.Bytes())
+
 	for i := 0; i < 100; i++ {
+
 		data = make([]byte, 32)
-		_, err := rand.Read(data)
+		_, err := prng.Read(data)
 		if err != nil {
 			t.Errorf("failed to read random data")
 			continue
@@ -766,8 +777,16 @@ func TestNfieldSquare(t *testing.T) {
 // TestNfieldSquareRand tests the square correctness by doing the
 // same calculation with Big.Int
 func TestNfieldSquareRand(t *testing.T) {
+	randSeed := rand.Int63()
+	defer func() {
+		if t.Failed() {
+			t.Logf("Random numbers using seed: %v", randSeed)
+		}
+	}()
+	prng := rand.New(rand.NewSource(randSeed))
+
 	data := make([]byte, 32)
-	_, err := rand.Read(data)
+	_, err := prng.Read(data)
 	if err != nil {
 		t.Fatalf("failed to read random data")
 	}
@@ -846,9 +865,18 @@ func TestNfieldInverse(t *testing.T) {
 // same calculation with Big.Int
 func TestNfieldInverseRand(t *testing.T) {
 	N := S256().N
+
+	randSeed := rand.Int63()
+	defer func() {
+		if t.Failed() {
+			t.Logf("Random numbers using seed: %v", randSeed)
+		}
+	}()
+	prng := rand.New(rand.NewSource(randSeed))
+
 	for i := 0; i < 100; i++ {
 		data := make([]byte, 32)
-		_, err := rand.Read(data)
+		_, err := prng.Read(data)
 		if err != nil {
 			t.Fatalf("failed to read random data")
 		}
@@ -867,8 +895,16 @@ func TestNfieldInverseRand(t *testing.T) {
 // TestNfieldCmp tests the correctess of Cmp by doing the same calculation with
 // Big.Int
 func TestNfieldCmp(t *testing.T) {
+	randSeed := rand.Int63()
+	defer func() {
+		if t.Failed() {
+			t.Logf("Random numbers using seed: %v", randSeed)
+		}
+	}()
+	prng := rand.New(rand.NewSource(randSeed))
+
 	data := make([]byte, 32)
-	_, err := rand.Read(data)
+	_, err := prng.Read(data)
 	if err != nil {
 		t.Fatalf("failed to read random data")
 	}
@@ -876,7 +912,7 @@ func TestNfieldCmp(t *testing.T) {
 	aN := new(nfieldVal).SetByteSlice(a.Bytes())
 	for i := 0; i < 100; i++ {
 		data = make([]byte, 32)
-		_, err := rand.Read(data)
+		_, err := prng.Read(data)
 		if err != nil {
 			t.Errorf("failed to read random data")
 			continue
@@ -901,11 +937,19 @@ func TestNfieldCmp(t *testing.T) {
 // TestNfieldMagnitudeRand tests the correctness of Magnitude by doing the
 // same calculation with Big.Int
 func TestNfieldMagnitudeRand(t *testing.T) {
+	randSeed := rand.Int63()
+	defer func() {
+		if t.Failed() {
+			t.Logf("Random numbers using seed: %v", randSeed)
+		}
+	}()
+	prng := rand.New(rand.NewSource(randSeed))
+
 	N := S256().N
 	failures := 0
 	for i := 0; i < 1000; i++ {
 		data := make([]byte, 32)
-		_, err := rand.Read(data)
+		_, err := prng.Read(data)
 		if err != nil {
 			t.Errorf("failed to read random data")
 		}
@@ -913,7 +957,7 @@ func TestNfieldMagnitudeRand(t *testing.T) {
 		aN := new(nfieldVal).SetByteSlice(a.Bytes())
 		aN.Normalize()
 		data = make([]byte, 32)
-		_, err = rand.Read(data)
+		_, err = prng.Read(data)
 		if err != nil {
 			t.Errorf("failed to read random data")
 			continue

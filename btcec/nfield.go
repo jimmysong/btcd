@@ -333,77 +333,57 @@ func (f *nfieldVal) Normalize() *nfieldVal {
 	// At this point, one more subtraction of the order might be needed
 	// if the current result is greater than or equal to the n.
 
-	// At this point, one more subtraction of the prime
-	// might be needed if the current result is greater than or equal to the
-	// n.
+	equalityCheck := EqUint32(0, (t9^nfieldMSBMask)|(t8^nfieldBaseMask)|
+		(t7^nfieldBaseMask)|(t6^nfieldBaseMask)|(t5^nfieldBaseMask))
 
-	subtractN := false
+	inequalityCheck := LessThanUint32(nfieldPrimeWordFour, t4) | (EqUint32(t4, nfieldPrimeWordFour) &
+		(LessThanUint32(nfieldPrimeWordThree, t3) | (EqUint32(t3, nfieldPrimeWordThree) &
+			(LessThanUint32(nfieldPrimeWordTwo, t2) | (EqUint32(t2, nfieldPrimeWordTwo) &
+				(LessThanUint32(nfieldPrimeWordOne, t1) | (EqUint32(t1, nfieldPrimeWordOne) &
+					LessOrEqUint32(nfieldPrimeWordZero, t0))))))))
 
-	if t9 == nfieldMSBMask && t8 == nfieldBaseMask && t7 == nfieldBaseMask && t6 == nfieldBaseMask && t5 == nfieldBaseMask {
-		if t4 > nfieldPrimeWordFour {
-			subtractN = true
-		} else if t4 == nfieldPrimeWordFour {
+	subtractN := equalityCheck & inequalityCheck
 
-			if t3 > nfieldPrimeWordThree {
-				subtractN = true
-			} else if t3 == nfieldPrimeWordThree {
-				if t2 > nfieldPrimeWordTwo {
-					subtractN = true
-				} else if t2 == nfieldPrimeWordTwo {
-					if t1 > nfieldPrimeWordOne {
-						subtractN = true
-					} else if t1 == nfieldPrimeWordOne {
-						if t0 >= nfieldPrimeWordZero {
-							subtractN = true
-						}
-					}
-				}
-			}
-		}
-	}
+	// preallocate some temporary variables
+	var (
+		t0b uint32
+		t1b uint32
+		t2b uint32
+		t3b uint32
+		t4b uint32
+	)
 
-	if subtractN {
+	borrow := LessThanUint32(t0, nfieldPrimeWordZero)
+	t0b = SelectUint32(borrow, (1<<nfieldBase)+t0-uint32(nfieldPrimeWordZero),
+		t0-nfieldPrimeWordZero)
 
-		borrow := uint32(0)
-		if t0 < nfieldPrimeWordZero {
-			t0 = (1 << nfieldBase) + t0 - uint32(nfieldPrimeWordZero)
-			borrow = 1
-		} else {
-			t0 = t0 - nfieldPrimeWordZero
-			borrow = 0
-		}
+	nextBorrow := LessThanUint32(t1-borrow, nfieldPrimeWordOne)
+	t1b = SelectUint32(nextBorrow, (1<<nfieldBase)+t1-uint32(nfieldPrimeWordOne)-borrow,
+		t1-nfieldPrimeWordOne-borrow)
 
-		if t1-borrow < nfieldPrimeWordOne {
-			t1 = (1 << nfieldBase) + t1 - uint32(nfieldPrimeWordOne) - borrow
-			borrow = 1
-		} else {
-			t1 = t1 - nfieldPrimeWordOne - borrow
-			borrow = 0
-		}
+	borrow = nextBorrow
+	nextBorrow = LessThanUint32(t2-borrow, nfieldPrimeWordTwo)
+	t2b = SelectUint32(nextBorrow, (1<<nfieldBase)+t2-uint32(nfieldPrimeWordTwo)-borrow,
+		t2-nfieldPrimeWordTwo-borrow)
 
-		if t2-borrow < nfieldPrimeWordTwo {
-			t2 = (1 << nfieldBase) + t2 - uint32(nfieldPrimeWordTwo) - borrow
-			borrow = 1
-		} else {
-			t2 = t2 - nfieldPrimeWordTwo - borrow
-			borrow = 0
-		}
+	borrow = nextBorrow
+	nextBorrow = LessThanUint32(t3-borrow, nfieldPrimeWordThree)
+	t3b = SelectUint32(nextBorrow, (1<<nfieldBase)+t3-uint32(nfieldPrimeWordThree)-borrow,
+		t3-nfieldPrimeWordThree-borrow)
 
-		if t3-borrow < nfieldPrimeWordThree {
-			t3 = (1 << nfieldBase) + t3 - uint32(nfieldPrimeWordThree) - borrow
-			borrow = 1
-		} else {
-			t3 = t3 - nfieldPrimeWordThree - borrow
-			borrow = 0
-		}
+	t4b = t4 - uint32(nfieldPrimeWordFour) - nextBorrow
 
-		t4 = t4 - uint32(nfieldPrimeWordFour) - borrow
-		t5 = 0
-		t6 = 0
-		t7 = 0
-		t8 = 0
-		t9 = 0
-	}
+	// choose based on subtractN
+	t0 = SelectUint32(subtractN, t0b, t0)
+	t1 = SelectUint32(subtractN, t1b, t1)
+	t2 = SelectUint32(subtractN, t2b, t2)
+	t3 = SelectUint32(subtractN, t3b, t3)
+	t4 = SelectUint32(subtractN, t4b, t4)
+	t5 = SelectUint32(subtractN, 0, t5)
+	t6 = SelectUint32(subtractN, 0, t6)
+	t7 = SelectUint32(subtractN, 0, t7)
+	t8 = SelectUint32(subtractN, 0, t8)
+	t9 = SelectUint32(subtractN, 0, t9)
 
 	// Finally, set the normalized and reduced words.
 	f.n[0] = t0
@@ -522,81 +502,49 @@ func (f *nfieldVal) NegateVal(val *nfieldVal) *nfieldVal {
 	// Negation in the nfield is just the order minus the value.
 	// Normalize first
 	f.Normalize()
-	if f.n[0]+f.n[1]+f.n[2]+f.n[3]+f.n[4]+f.n[5]+f.n[6]+f.n[7]+f.n[8]+f.n[9] == 0 {
-		return f
-	}
-	borrow := uint32(0)
-	if val.n[0] > nfieldPrimeWordZero {
-		f.n[0] = (1 << nfieldBase) + nfieldPrimeWordZero - val.n[0]
-		borrow = 1
-	} else {
-		f.n[0] = nfieldPrimeWordZero - val.n[0]
-		borrow = 0
-	}
 
-	if val.n[1] > nfieldPrimeWordOne-borrow {
-		f.n[1] = (1 << nfieldBase) + nfieldPrimeWordOne - val.n[1] - borrow
-		borrow = 1
-	} else {
-		f.n[1] = nfieldPrimeWordOne - val.n[1] - borrow
-		borrow = 0
-	}
+	borrow := LessThanUint32(nfieldPrimeWordZero, val.n[0])
+	f.n[0] = SelectUint32(borrow, (1<<nfieldBase)+nfieldPrimeWordZero-val.n[0],
+		nfieldPrimeWordZero-val.n[0])
 
-	if val.n[2] > nfieldPrimeWordTwo-borrow {
-		f.n[2] = (1 << nfieldBase) + nfieldPrimeWordTwo - val.n[2] - borrow
-		borrow = 1
-	} else {
-		f.n[2] = nfieldPrimeWordTwo - val.n[2] - borrow
-		borrow = 0
-	}
+	nextBorrow := LessThanUint32(nfieldPrimeWordOne-borrow, val.n[1])
+	f.n[1] = SelectUint32(nextBorrow, (1<<nfieldBase)+nfieldPrimeWordOne-val.n[1]-borrow,
+		nfieldPrimeWordOne-val.n[1]-borrow)
 
-	if val.n[3] > nfieldPrimeWordThree-borrow {
-		f.n[3] = (1 << nfieldBase) + nfieldPrimeWordThree - val.n[3] - borrow
-		borrow = 1
-	} else {
-		f.n[3] = nfieldPrimeWordThree - val.n[3] - borrow
-		borrow = 0
-	}
+	borrow = nextBorrow
+	nextBorrow = LessThanUint32(nfieldPrimeWordTwo-borrow, val.n[2])
+	f.n[2] = SelectUint32(nextBorrow, (1<<nfieldBase)+nfieldPrimeWordTwo-val.n[2]-borrow,
+		nfieldPrimeWordTwo-val.n[2]-borrow)
 
-	if val.n[4] > nfieldPrimeWordFour-borrow {
-		f.n[4] = (1 << nfieldBase) + nfieldPrimeWordFour - val.n[4] - borrow
-		borrow = 1
-	} else {
-		f.n[4] = nfieldPrimeWordFour - val.n[4] - borrow
-		borrow = 0
-	}
+	borrow = nextBorrow
+	nextBorrow = LessThanUint32(nfieldPrimeWordThree-borrow, val.n[3])
+	f.n[3] = SelectUint32(nextBorrow, (1<<nfieldBase)+nfieldPrimeWordThree-val.n[3]-borrow,
+		nfieldPrimeWordThree-val.n[3]-borrow)
 
-	if val.n[5] > nfieldBaseMask-borrow {
-		f.n[5] = (1 << nfieldBase) + nfieldBaseMask - val.n[5] - borrow
-		borrow = 1
-	} else {
-		f.n[5] = nfieldBaseMask - val.n[5] - borrow
-		borrow = 0
-	}
+	borrow = nextBorrow
+	nextBorrow = LessThanUint32(nfieldPrimeWordFour-borrow, val.n[4])
+	f.n[4] = SelectUint32(nextBorrow, (1<<nfieldBase)+nfieldPrimeWordFour-val.n[4]-borrow,
+		nfieldPrimeWordFour-val.n[4]-borrow)
 
-	if val.n[6] > nfieldBaseMask-borrow {
-		f.n[6] = (1 << nfieldBase) + nfieldBaseMask - val.n[6] - borrow
-		borrow = 1
-	} else {
-		f.n[6] = nfieldBaseMask - val.n[6] - borrow
-		borrow = 0
-	}
+	borrow = nextBorrow
+	nextBorrow = LessThanUint32(nfieldBaseMask-borrow, val.n[5])
+	f.n[5] = SelectUint32(nextBorrow, (1<<nfieldBase)+nfieldBaseMask-val.n[5]-borrow,
+		nfieldBaseMask-val.n[5]-borrow)
 
-	if val.n[7] > nfieldBaseMask-borrow {
-		f.n[7] = (1 << nfieldBase) + nfieldBaseMask - val.n[7] - borrow
-		borrow = 1
-	} else {
-		f.n[7] = nfieldBaseMask - val.n[7] - borrow
-		borrow = 0
-	}
+	borrow = nextBorrow
+	nextBorrow = LessThanUint32(nfieldBaseMask-borrow, val.n[6])
+	f.n[6] = SelectUint32(nextBorrow, (1<<nfieldBase)+nfieldBaseMask-val.n[6]-borrow,
+		nfieldBaseMask-val.n[6]-borrow)
 
-	if val.n[8] > nfieldBaseMask-borrow {
-		f.n[8] = (1 << nfieldBase) + nfieldBaseMask - val.n[8] - borrow
-		borrow = 1
-	} else {
-		f.n[8] = nfieldBaseMask - val.n[8] - borrow
-		borrow = 0
-	}
+	borrow = nextBorrow
+	nextBorrow = LessThanUint32(nfieldBaseMask-borrow, val.n[7])
+	f.n[7] = SelectUint32(nextBorrow, (1<<nfieldBase)+nfieldBaseMask-val.n[7]-borrow,
+		nfieldBaseMask-val.n[7]-borrow)
+
+	borrow = nextBorrow
+	nextBorrow = LessThanUint32(nfieldBaseMask-borrow, val.n[8])
+	f.n[8] = SelectUint32(nextBorrow, (1<<nfieldBase)+nfieldBaseMask-val.n[8]-borrow,
+		nfieldBaseMask-val.n[8]-borrow)
 
 	f.n[9] = nfieldMSBMask - val.n[9] - borrow
 
@@ -1428,51 +1376,29 @@ func (f *nfieldVal) Inverse() *nfieldVal {
 }
 
 // Cmp returns -1 if f < val, 0 if f == val, 1 if f > val
+// TODO: consider creating an f.LessThan(val) function to avoid making the additional equality check when not necessary
 func (f *nfieldVal) Cmp(val *nfieldVal) int {
 	f.Normalize()
 	val.Normalize()
-	if f.n[9] < val.n[9] {
-		return -1
-	} else if f.n[9] > val.n[9] {
-		return 1
-	} else if f.n[8] < val.n[8] {
-		return -1
-	} else if f.n[8] > val.n[8] {
-		return 1
-	} else if f.n[7] < val.n[7] {
-		return -1
-	} else if f.n[7] > val.n[7] {
-		return 1
-	} else if f.n[6] < val.n[6] {
-		return -1
-	} else if f.n[6] > val.n[6] {
-		return 1
-	} else if f.n[5] < val.n[5] {
-		return -1
-	} else if f.n[5] > val.n[5] {
-		return 1
-	} else if f.n[4] < val.n[4] {
-		return -1
-	} else if f.n[4] > val.n[4] {
-		return 1
-	} else if f.n[3] < val.n[3] {
-		return -1
-	} else if f.n[3] > val.n[3] {
-		return 1
-	} else if f.n[2] < val.n[2] {
-		return -1
-	} else if f.n[2] > val.n[2] {
-		return 1
-	} else if f.n[1] < val.n[1] {
-		return -1
-	} else if f.n[1] > val.n[1] {
-		return 1
-	} else if f.n[0] < val.n[0] {
-		return -1
-	} else if f.n[0] > val.n[0] {
-		return 1
-	}
-	return 0
+
+	equalityCheck := EqUint32(0, (f.n[0]^val.n[0])|(f.n[1]^val.n[1])|(f.n[2]^val.n[2])|
+		(f.n[3]^val.n[3])|(f.n[4]^val.n[4])|(f.n[5]^val.n[5])|
+		(f.n[6]^val.n[6])|(f.n[7]^val.n[7])|(f.n[8]^val.n[8])|
+		(f.n[9]^val.n[9]))
+
+	inequalityCheck := LessThanUint32(val.n[9], f.n[9]) | (EqUint32(f.n[9], val.n[9]) &
+		(LessThanUint32(val.n[8], f.n[8]) | (EqUint32(f.n[8], val.n[8]) &
+			(LessThanUint32(val.n[7], f.n[7]) | (EqUint32(f.n[7], val.n[7]) &
+				(LessThanUint32(val.n[6], f.n[6]) | (EqUint32(f.n[6], val.n[6]) &
+					(LessThanUint32(val.n[5], f.n[5]) | (EqUint32(f.n[5], val.n[5]) &
+						(LessThanUint32(val.n[4], f.n[4]) | (EqUint32(f.n[4], val.n[4]) &
+							(LessThanUint32(val.n[3], f.n[3]) | (EqUint32(f.n[3], val.n[3]) &
+								(LessThanUint32(val.n[2], f.n[2]) | (EqUint32(f.n[2], val.n[2]) &
+									(LessThanUint32(val.n[1], f.n[1]) | (EqUint32(f.n[1], val.n[1]) &
+										(LessThanUint32(val.n[0], f.n[0]) | (EqUint32(f.n[0], val.n[8]))))))))))))))))))))
+
+	result := SelectUint32(inequalityCheck, 2, 0)
+	return int(SelectUint32(equalityCheck, 1, result)) - 1
 }
 
 // Magnitude computes val*val2 / N, rounded down.
